@@ -1,0 +1,323 @@
+---
+title: "CMA stats for paper"
+author: "B. Thierry, Spherelab"
+date: "04/06/2020"
+output:
+  html_document:
+    keep_md: TRUE
+    toc: TRUE
+    toc_float: TRUE
+    code_folding: hide
+---
+
+```{r setup, include=FALSE, cache=FALSE, echo=FALSE}
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(sf)
+library(Hmisc)
+
+knitr::opts_chunk$set(echo = TRUE, fig.width=8)
+read_chunk('gentrification_measures.R')
+```
+
+```{r chunk-census-get-data, include=FALSE, echo=FALSE, warning=FALSE}
+# Need to load data (which is also done in gentrification_measures.Rmd)
+```
+
+## CMA stats for 2006 and 2016
+
+- median income
+- rental housing
+- owner occupied housing
+- age 30-44yrs
+- professional occupation
+- low income
+- university degree
+
+By CMA + mean/median/sd/min/max, computed at the CT level, all stats weighted
+
+```{r load-data}
+# Extract and harmonize variable names
+ct2006_stats <- census_data_06 %>%
+  transmute(year = 2006,
+            GeoUID = GeoUID,
+            PR_UID = PR_UID,
+            CMAP_UID = CMA_UID, #sync with StatCan notation
+            CMA_UID = case_when(str_length(CMA_UID) == 3 ~ CMA_UID,
+                                str_length(CMA_UID) == 5 ~ str_sub(CMA_UID, 3, -1)),
+            median_income.pop = `v_CA06_1988: Household income in 2005 of private households - 20% sample data`,
+            median_income = case_when(median_income.pop > 0 ~ `v_CA06_2000: Median household income $`,
+                                      TRUE ~ NA_real_),
+            rental_housing.pop = `v_CA06_101: Total number of occupied private dwellings by housing tenure - 20% sample data`,
+            rental_housing = `v_CA06_103: Rented` / rental_housing.pop * 100,
+            owner_occupied_housing.pop = `v_CA06_101: Total number of occupied private dwellings by housing tenure - 20% sample data`,
+            owner_occupied_housing = `v_CA06_102: Owned` / owner_occupied_housing.pop * 100,
+            age_30_44yrs.pop = `v_CA06_2: Total population by sex and age groups - 100% data`,
+            age_30_44yrs = (`v_CA06_10: 30 to 34 years` + `v_CA06_11: 35 to 39 years` + `v_CA06_12: 40 to 44 years` + 
+                              `v_CA06_29: 30 to 34 years` + `v_CA06_30: 35 to 39 years` + `v_CA06_31: 40 to 44 years`) / age_30_44yrs.pop * 100,
+            prof_occup.pop = `v_CA06_1007: Total labour force 15 years and over by industry - North American Industry Classification System 2002  - 20% sample data`,
+            prof_occup = `v_CA06_1021: 54 Professional, scientific and technical services` / prof_occup.pop * 100,
+            low_income.pop = `v_CA06_1979: Total persons in private households - 20% sample data`,
+            low_income = `v_CA06_1981: Prevalence of low income after tax in 2005 %`,
+            university_degree.pop = `v_CA06_1234: Total population 15 to 24 years by highest certificate, diploma or degree - 20% sample data` + `v_CA06_1248: Total population 25 to 64 years by highest certificate, diploma or degree - 20% sample data` + `v_CA06_1262: Total population 65 years and over by highest certificate, diploma or degree - 20% sample data`,
+            university_degree = (`v_CA06_1240: University certificate, diploma or degree` + `v_CA06_1254: University certificate, diploma or degree` + `v_CA06_1268: University certificate, diploma or degree`) / university_degree.pop * 100,
+            rental_housing_price.pop = `v_CA06_2049: Tenant-occupied private non-farm, non-reserve dwellings`,
+            rental_housing_price = `v_CA06_2050: Average gross rent $`)
+st_geometry(ct2006_stats) <- NULL
+
+ct2016_stats <- census_data_16 %>%
+  transmute(year = 2016,
+            GeoUID = GeoUID,
+            PR_UID = PR_UID,
+            CMAP_UID = case_when(str_length(CMA_UID) == 3 ~ paste0(PR_UID, CMA_UID),
+                                str_length(CMA_UID) == 5 ~ CMA_UID), #sync with StatCan notation
+            CMA_UID = case_when(str_length(CMA_UID) == 3 ~ CMA_UID,
+                                str_length(CMA_UID) == 5 ~ str_sub(CMA_UID, 3, -1)),
+            median_income.pop = `v_CA16_2396: Total - Income statistics in 2015 for private households by household size - 100% data`,
+            median_income = case_when(median_income.pop > 0 ~ `v_CA16_2397: Median total income of households in 2015 ($)`,
+                                      TRUE ~ NA_real_),
+            rental_housing.pop = `v_CA16_4836: Total - Private households by tenure - 25% sample data`,
+            rental_housing = `v_CA16_4838: Renter` / rental_housing.pop * 100,
+            owner_occupied_housing.pop = `v_CA16_4836: Total - Private households by tenure - 25% sample data`,
+            owner_occupied_housing = `v_CA16_4837: Owner` / owner_occupied_housing.pop * 100,
+            age_30_44yrs.pop = `v_CA16_1: Age Stats`,
+            age_30_44yrs = (`v_CA16_118: 30 to 34 years` + `v_CA16_136: 35 to 39 years` + `v_CA16_154: 40 to 44 years`) / age_30_44yrs.pop * 100,
+            prof_occup.pop = `v_CA16_5693: Total Labour Force population aged 15 years and over by Industry - North American Industry Classification System (NAICS) 2012 - 25% sample data`,
+            prof_occup = `v_CA16_5735: 54 Professional, scientific and technical services` / prof_occup.pop * 100,
+            low_income.pop = `v_CA16_2510: Total - Low-income status in 2015 for the population in private households to whom low-income concepts are applicable - 100% data`,
+            low_income = `v_CA16_2570: Prevalence of low income based on the Low-income cut-offs, after tax (LICO-AT) (%)`,
+            university_degree.pop = `v_CA16_5051: Total - Highest certificate, diploma or degree for the population aged 15 years and over in private households - 25% sample data`,
+            university_degree = `v_CA16_5078: University certificate, diploma or degree at bachelor level or above` / university_degree.pop * 100,
+            rental_housing_price.pop = `v_CA16_4897: Total - Tenant households in non-farm, non-reserve private dwellings - 25% sample data`,
+            rental_housing_price = `v_CA16_4900: Median monthly shelter costs for rented dwellings ($)`
+            )
+st_geometry(ct2016_stats) <- NULL
+
+cma_stats <- bind_rows(ct2006_stats, ct2016_stats)
+
+# Add general CMA attributes
+geo_attrib <- read.csv('data/Geographic_attribute_file/2016_92-151_XBB.csv', encoding = "latin1") # Import CMA/CA attributes from StatCan | Catalogue ref.: 92-151-G | Geographic attribute file
+cma_B <- geo_attrib %>% 
+  group_by(PRname.PRnom, CMAPuid.RMRPidu, CMAuid.RMRidu, CMAname.RMRnom, CMAtype.RMRgenre) %>%
+  summarise(pop_total = sum(DBpop2016.IDpop2016, na.rm = TRUE),
+            dwell_total = sum(DBtdwell2016.IDtlog2016, na.rm = TRUE)) %>%
+  ungroup() %>%
+  filter(CMAtype.RMRgenre == 'B') %>%
+  transmute(PRname = PRname.PRnom,
+            CMAP_UID = as.character(CMAPuid.RMRPidu),
+            CMAname = CMAname.RMRnom,
+            pop_total = pop_total,
+            dwell_total = dwell_total)
+
+# Control
+# cma_stats_ctrl <- cma_stats %>% group_by(year) %>%
+#   summarise(n = n(),
+#             mean_median_income.pop = sum(median_income.pop, na.rm=T),
+#             mean_median_income = round(wtd.mean(median_income, median_income.pop, na.rm=T), digits=1),
+#             mean_rental_housing.pop = sum(rental_housing.pop, na.rm=T),
+#             mean_rental_housing = round(wtd.mean(rental_housing, rental_housing.pop, na.rm=T), digits=1),
+#             mean_owner_occupied_housing.pop = sum(owner_occupied_housing.pop, na.rm=T),
+#             mean_owner_occupied_housing = round(wtd.mean(owner_occupied_housing, owner_occupied_housing.pop, na.rm=T), digits=1),
+#             mean_age_30_44yrs.pop = sum(age_30_44yrs.pop, na.rm=T),
+#             mean_age_30_44yrs = round(wtd.mean(age_30_44yrs, age_30_44yrs.pop, na.rm=T), digits=1),
+#             mean_prof_occup.pop = sum(prof_occup.pop, na.rm=T),
+#             mean_prof_occup = round(wtd.mean(prof_occup, prof_occup.pop, na.rm=T), digits=1),
+#             mean_low_income.pop = sum(low_income.pop, na.rm=T),
+#             mean_low_income = round(wtd.mean(low_income, low_income.pop, na.rm=T), digits=1),
+#             mean_university_degree.pop = sum(university_degree.pop, na.rm=T),
+#             mean_university_degree = round(wtd.mean(university_degree, university_degree.pop, na.rm=T), digits=1)) %>%
+#   pivot_longer(-year) %>%
+#   pivot_wider(names_from=year, values_from=value)
+# knitr::kable(cma_stats_ctrl, caption = "Control | Basic stats, 2006 vs. 2016, weighted") %>%
+#   kable_styling(bootstrap_options = "striped")
+
+# Output global stats for all CMAs (-> table 2 in paper)
+cma_stats_pop <- cma_stats %>%
+  select(year, GeoUID, ends_with(".pop")) %>%
+  pivot_longer(-c(year, GeoUID), names_to = "var", names_transform = list(var = ~ str_replace(.x, ".pop", "")), values_to = "pop")
+
+cma_stats_var <- cma_stats %>%
+  select(-ends_with(".pop")) %>%
+  pivot_longer(-c(year, GeoUID, PR_UID, CMA_UID, CMAP_UID), names_to = "var") %>%
+  inner_join(cma_stats_pop, by=c("year", "GeoUID", "var"))
+
+
+cma_stats_global <- cma_stats_var %>%
+  group_by(year, var) %>%
+  summarise(N = n(),
+            Median = wtd.quantile(value, pop, probs = .5, na.rm = T),
+            IQR = wtd.quantile(value, pop, probs = .75, na.rm = T) - wtd.quantile(value, pop, probs = .25, na.rm = T),
+            Range = max(value, na.rm = T) - min(value, na.rm = T)) %>%
+    ungroup() %>%
+    pivot_wider(names_from = year, values_from = c(N, Median, IQR, Range)) %>%
+    select(var, ends_with('_2006'), ends_with('_2016'))
+
+knitr::kable(cma_stats_global,
+            digits = 1,
+            col.names = c("Variable",
+                          "N CTs", "Median", "IQR", "Range",
+                          "N CTs", "Median", "IQR", "Range")) %>%
+  kable_styling("striped") %>%
+  add_header_above(c(" " = 1, "2006" = 4, "2016" = 4))
+```
+
+
+
+```{r output-stats-by-CMA}
+compute_stats_by_CMA <- function(v, w) {
+  # Compute weighted stats mean/med/sd/min/max for var V by year and CMA and output table
+  digits = 1
+  v_group <- cma_stats %>%
+    group_by(year, CMAP_UID) %>%
+    summarise(N = n(),
+              Mean = round(wtd.mean({{ v }}, {{ w }}, na.rm = TRUE), digits = digits),
+              Median = round(wtd.quantile({{ v }}, {{ w }}, probs=.5, na.rm = TRUE), digits = digits),
+              Std = round(sqrt(wtd.var({{ v }}, {{ w }}, na.rm = TRUE)), digits = digits),
+              Min = round(min({{ v }}, na.rm = TRUE), digits = digits),
+              Max = round(max({{ v }}, na.rm = TRUE),  digits = digits)) %>%
+    ungroup() %>%
+    pivot_wider(names_from = year, values_from = c(N, Mean, Median, Std, Min, Max)) %>%
+    select(CMAP_UID, ends_with('_2006'), ends_with('_2016'))
+    
+  v_group <- cma_B %>% 
+    mutate(PRname = str_replace(PRname,"(\\(.* / .*| / .*)", ""),
+           CMAname = str_replace(CMAname,"(\\(.* / .*| / .*)", "")) %>%
+    select(-dwell_total) %>% 
+    inner_join(v_group, by="CMAP_UID")
+  
+  return(v_group)
+    
+}
+```
+
+## Median income ($)
+
+2006: `v_CA06_1988: Household income in 2005 of private households - 20% sample data`  
+2016: `v_CA16_2397: Median total income of households in 2015 ($)`
+
+```{r }
+agg_stats <- compute_stats_by_CMA(median_income, median_income.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```
+
+## Rental housing (%)
+
+2006: `v_CA06_101: Total number of occupied private dwellings by housing tenure - 20% sample data` & `v_CA06_103: Rented`  
+2016: `v_CA16_4836: Total - Private households by tenure - 25% sample data` & `v_CA16_4838: Renter`
+
+```{r message=FALSE}
+agg_stats <- compute_stats_by_CMA(rental_housing, rental_housing.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```
+
+## Owner occupied housing (%)
+
+2006: `v_CA06_101: Total number of occupied private dwellings by housing tenure - 20% sample data` & `v_CA06_102: Owned`  
+2016: `v_CA16_4836: Total - Private households by tenure - 25% sample data` & `v_CA16_4837: Owner`
+
+```{r message=FALSE}
+agg_stats <- compute_stats_by_CMA(owner_occupied_housing, owner_occupied_housing.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```
+
+## Age 30-44 years (%)
+
+2006: `v_CA06_2: Total population by sex and age groups - 100% data`, etc.  
+2016: `v_CA16_1: Age Stats`, etc.
+
+```{r message=FALSE}
+agg_stats <- compute_stats_by_CMA(age_30_44yrs, age_30_44yrs.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```
+
+## Professional occupation (%)
+
+2006: `v_CA06_1021: 54 Professional, scientific and technical services`  
+2016: `v_CA16_5735: 54 Professional, scientific and technical services`
+
+```{r message=FALSE}
+agg_stats <- compute_stats_by_CMA(prof_occup, prof_occup.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```
+
+## Low income cut-off (%)
+
+2006: `v_CA06_1981: Prevalence of low income after tax in 2005 %`  
+2016: `v_CA16_2570: Prevalence of low income based on the Low-income cut-offs, after tax (LICO-AT) (%)`
+
+```{r message=FALSE}
+agg_stats <- compute_stats_by_CMA(low_income, low_income.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```
+
+## University degree (%)
+
+2006: `v_CA06_1234: Total population 15 to 24 years by highest certificate, diploma or degree - 20% sample data`, `v_CA06_1240: University certificate, diploma or degree`, etc.  
+2016: `v_CA16_5078: University certificate, diploma or degree at bachelor level or above`
+
+```{r message=FALSE}
+agg_stats <- compute_stats_by_CMA(university_degree, university_degree.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```
+
+## Rental housing price ($)
+
+2006: `v_CA06_2050: Average gross rent $`  
+2016: `v_CA16_4900: Median monthly shelter costs for rented dwellings ($)`
+
+```{r message=FALSE}
+agg_stats <- compute_stats_by_CMA(rental_housing_price, rental_housing_price.pop)
+knitr::kable(agg_stats,
+           col.names = c("Province", "CMA Id", "Name", "Population",
+                         "N", "Mean", "Median", "Std", "Min", "Max",
+                         "N", "Mean", "Median", "Std", "Min", "Max")) %>%
+kable_styling("striped") %>%
+add_header_above(c(" " = 4, "2006" = 6, "2016" = 6)) %>%
+collapse_rows(columns = 1, valign = "top")
+```

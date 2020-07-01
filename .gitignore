@@ -1,0 +1,12 @@
+# keep cancensus API key private
+cancensus_apiKey.R
+
+# R stuff
+.Rproj.user
+gentrification_GENUINE_paper.Rproj
+gentrification_measures.html
+
+# data and cache
+cancensus_cache/
+data/*.gpkg*
+data/Geographic_attribute_file/2016_92-151_XBB.csv

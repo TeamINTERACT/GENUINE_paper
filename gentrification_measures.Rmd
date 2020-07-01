@@ -1,0 +1,745 @@
+---
+title: "Gentrification measures"
+author: "Benoit THIERRY"
+date: "16/01/2020"
+output: 
+  html_document:
+    keep_md: TRUE
+    toc: TRUE
+    toc_float: TRUE
+    code_folding: hide
+---
+
+```{r setup, include=FALSE, cache=FALSE, echo=FALSE}
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+knitr::opts_chunk$set(echo = TRUE, fig.width=8)
+read_chunk('gentrification_measures.R')
+```
+
+```{r chunk-census-get-data, echo=FALSE, warning=FALSE}
+```
+
+## Metric definitions
+
+In all metrics below, we are using census data from 2006 and 2016.
+
+### Steinmetz-Wood, M., Wasfi, R., _et al._, 2017
+
+Ref: [DOI 10.1186/s12942-017-0096-6](https://ij-healthgeographics.biomedcentral.com/articles/10.1186/s12942-017-0096-6)
+
+Original paper is using CMA level Z-score. Census division (_i.e._ municipality) Z-score added for comparison purposes with Freeman and Ding who work at this scale. Moreover, census years considered were 1996 and 2006.
+
+```{r chunk-rania-metric, warning=FALSE}
+```
+
+```{r rania-output, echo=FALSE}
+# display map of gentrified CTs at census division (~municipality) and census metropolitan area levels
+grcd <- ggplot(data = filter(gentrif_rania06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified), color=factor(potentially_gentrifying))) + 
+  scale_fill_manual(name="Gentrified" ,values=c("gray", "orangered")) + 
+  scale_color_manual(name="Gentrifiable", values=c("darkgray", "firebrick")) +
+  labs(title = "Steinmetz | Census division level") +
+  theme(axis.text = element_blank())
+
+grcma <- ggplot(data = filter(gentrif_rania06_16_CMA, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified), color=factor(potentially_gentrifying))) + 
+  scale_fill_manual(name="Gentrified" ,values=c("gray", "orangered")) + 
+  scale_color_manual(name="Gentrifiable", values=c("darkgray", "firebrick")) +
+  labs(title = "Steinmetz | Census metropolitan area level") +
+  theme(axis.text = element_blank())
+
+ggp <- plot_grid(grcd + theme(legend.position="none"),
+                 grcma + theme(legend.position="none"))
+gl <- get_legend(grcd + theme(legend.position = "bottom"))
+plot_grid(ggp, gl, ncol = 1, rel_heights = c(1, .2))
+rm(grcd, grcma, ggp, gl)
+```
+
+#### Statistics {.tabset}
+
+##### CMA level
+
+```{r rania-output-stats-cma, echo=FALSE}
+## Give some basic stats about number of CTs and pop within each category
+# Gentrifiable | CMA
+rania_stat_gentrifiable_CMA <- gentrif_rania06_16_CMA %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(potentially_gentrifying) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(rania_stat_gentrifiable_CMA) <- NULL
+knitr::kable(rania_stat_gentrifiable_CMA, caption = "Gentrifiable CTs, using the CMA level | Montréal Island")
+
+# Gentrified | CMA
+rania_stat_gentrified_CMA <- gentrif_rania06_16_CMA %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(rania_stat_gentrified_CMA) <- NULL
+knitr::kable(rania_stat_gentrified_CMA, caption = "Gentrified CTs, using the CMA level | Montréal Island")
+```
+
+##### CD level
+
+```{r rania-output-stats-cd, echo=FALSE}
+# Gentrifiable | CD
+rania_stat_gentrifiable_CD <- gentrif_rania06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(potentially_gentrifying) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(rania_stat_gentrifiable_CD) <- NULL
+knitr::kable(rania_stat_gentrifiable_CD, caption = "Gentrifiable CTs, using the CD level | Montréal Island")
+
+# Gentrified | CD
+rania_stat_gentrified_CD <- gentrif_rania06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(rania_stat_gentrified_CD) <- NULL
+knitr::kable(rania_stat_gentrified_CD, caption = "Gentrified CTs, using the CD level | Montréal Island")
+
+rm(rania_stat_gentrifiable_CMA, rania_stat_gentrified_CMA, rania_stat_gentrifiable_CD, rania_stat_gentrified_CD)
+```
+
+### Grube-Cavers, A., Patterson, Z. 2015
+
+Ref: [DOI 10.1177/0042098014524287](https://journals.sagepub.com/doi/10.1177/0042098014524287)
+
+Here again, CTs are compared to CMA average and census years were 1996 and 2006.
+
+```{r chunk-grube-metric}
+```
+
+```{r grube-output, echo=FALSE}
+# display map of gentrified CTs at census metropolitan area levels
+ggplot(data = filter(gentrif_grube06_16_CMA, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified), color=factor(gentrifiable))) + 
+  scale_fill_manual(name="Gentrified" ,values=c("gray", "orangered")) + 
+  scale_color_manual(name="Gentrifiable", values=c("darkgray", "firebrick")) +
+  labs(title = "Grube-Cavers")
+
+## Give some basic stats about number of CTs and pop within each category
+# Gentrifiable
+grube_stat_gentrifiable <- gentrif_grube06_16_CMA %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrifiable) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(grube_stat_gentrifiable) <- NULL
+knitr::kable(grube_stat_gentrifiable, caption = "Gentrifiable CTs | Montréal Island")
+
+# Gentrified
+grube_stat_gentrified <- gentrif_grube06_16_CMA %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(grube_stat_gentrified) <- NULL
+knitr::kable(grube_stat_gentrified, caption = "Gentrified CTs | Montréal Island")
+
+rm(grube_stat_gentrifiable, grube_stat_gentrified)
+```
+
+### Freeman, L., 2005
+
+Ref: [DOI: 10.1177/1078087404273341](https://journals.sagepub.com/doi/10.1177/1078087404273341)
+
+Freeman' gentrification metrics applies at the municiplaty level, which in Canada corresponds to the Census Subdivision [(CSD)](https://www12.statcan.gc.ca/census-recensement/2016/ref/dict/geo012-eng.cfm). Yet, this level may not properly capture the phenomenon at a larger scale, hence the implementation of the metric in a Canadian context is rather based on Census Division [(CD)](https://www12.statcan.gc.ca/census-recensement/2016/ref/dict/geo008-eng.cfm) and Census Consolidated Subdivision [(CCS)](https://www12.statcan.gc.ca/census-recensement/2016/ref/dict/geo007-eng.cfm).
+
+Freeman is using two thresholds to select gentrifiable CTs: one is comparing CT variables to municipality median while the second is using the 40th percentile instead. Moreover, reinvestment is measured by the proportion of housing built within the past 20 years. Yet, Canadian censuses give us either numbers for the past 15 years or 25 years.  
+All for combinations at the CD level are presented below (For Montreal, CD and CCS match).
+
+```{r chunk-freeman-metric}
+```
+
+```{r freeman-output-original, echo=FALSE, fig.height=8}
+# display map of gentrified CTs
+g1990med <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_built1990_median), color=factor(candidate_built1990_median))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "Median | built since 1990") + 
+  theme(axis.text = element_blank())
+
+g2000med <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_built2000_median), color=factor(candidate_built2000_median))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "Median | built since 2000") + 
+  theme(axis.text = element_blank())
+
+g1990p40th <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_built1990_40thpctile), color=factor(candidate_built1990_40thpctile))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "40th percentile | built since 1990") + 
+  theme(axis.text = element_blank())
+
+g2000p40th <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_built2000_40thpctile), color=factor(candidate_built2000_40thpctile))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "40th percentile | built since 2000") + 
+  theme(axis.text = element_blank())
+
+ggp <- plot_grid(g1990med + theme(legend.position="none"),
+          g2000med + theme(legend.position="none"),
+          g1990p40th + theme(legend.position="none"),
+          g2000p40th + theme(legend.position="none"), nrow = 2)
+gl <- get_legend(g1990med + theme(legend.position = "bottom"))
+plot_grid(ggp, gl, ncol = 1, rel_heights = c(2, .2))
+
+rm(g1990med, g2000med, g1990p40th, g2000p40th, ggp, gl)
+```
+
+#### Statistics {.tabset}
+
+##### Median|1990
+
+```{r freeman-output-stats-med1990, echo=FALSE}
+## Give some basic stats about number of CTs and pop within each category
+# Gentrifiable | median | built since 1990
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built1990_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, median & built since 1990 | Montréal Island")
+
+# Gentrified | median | built since 1990
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_built1990_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, median & built since 1990 | Montréal Island")
+```
+
+##### Median|2000
+
+```{r freeman-output-stats-med2000, echo=FALSE}
+# Gentrifiable | median | built since 2000
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built2000_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, median & built since 2000 | Montréal Island")
+
+# Gentrified | median | built since 2000
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_built2000_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, median & built since 2000 | Montréal Island")
+```
+
+##### 40th percentile|1990
+
+```{r freeman-output-stats40th1990, echo=FALSE}
+# Gentrifiable | 40thpctile | built since 1990
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built1990_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, 40th percentile & built since 1990 | Montréal Island")
+
+# Gentrified | 40thpctile | built since 1990
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_built1990_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, 40th percentile & built since 1990 | Montréal Island")
+```
+
+##### 40th percentile|2000
+
+```{r freeman-output-stats40th2000, echo=FALSE}
+# Gentrifiable | 40thpctile | built since 2000
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built2000_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, 40th percentile & built since 2000 | Montréal Island")
+
+# Gentrified | 40thpctile | built since 2000
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_built2000_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, 40th percentile & built since 2000 | Montréal Island")
+
+rm(freeman_stat_gentrifiable, freeman_stat_gentrified)
+```
+
+#### Tweaked version
+
+The original Freeman's metric is comparing housing price increase to inflation[^1], which for Canada amounts to roughly 17.7% between 2006 and 2016 (source [Bank of Canada](https://www.bankofcanada.ca/rates/related/inflation-calculator/)). Yet, in Canadian cities housing prices tend to increase way quicker than inflation, hence the criteria is mostly inoperant to reselect CTs for gentrification identification purposes. After discussion, it is proposed to use a tweaked version of Freeman that compares housing prices to median increase for the municipality. Below are the resulting maps and statistics.
+
+[^1]: More precisely, the original paper refers to an increase in _real housing prices_ during the intercensal period, which is defined as the the ratio of nominal price to the consumers’ expenditure deflator in each country, both seasonally adjusted, [according to OECD](https://data.oecd.org/price/housing-prices.htm).
+
+```{r freeman-output-tweaked, echo=FALSE, fig.height=8}
+# display map of gentrified CTs
+g1990med <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_tweaked_built1990_median), color=factor(candidate_built1990_median))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "Median | built yr=1990") + 
+  theme(axis.text = element_blank())
+
+g2000med <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_tweaked_built2000_median), color=factor(candidate_built2000_median))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "Median | built yr=2000") + 
+  theme(axis.text = element_blank())
+
+g1990p40th <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_tweaked_built1990_40thpctile), color=factor(candidate_built1990_40thpctile))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "40th percentile | built yr=1990") + 
+  theme(axis.text = element_blank())
+
+g2000p40th <- ggplot(data = filter(gentrif_freeman06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_tweaked_built2000_40thpctile), color=factor(candidate_built2000_40thpctile))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Candidate", values=c("darkgray", "firebrick")) +
+  labs(title = "40th percentile | built yr=2000") + 
+  theme(axis.text = element_blank())
+
+ggp <- plot_grid(g1990med + theme(legend.position="none"),
+          g2000med + theme(legend.position="none"),
+          g1990p40th + theme(legend.position="none"),
+          g2000p40th + theme(legend.position="none"), nrow = 2)
+gl <- get_legend(g1990med + theme(legend.position = "bottom"))
+plot_grid(ggp, gl, ncol = 1, rel_heights = c(2, .2))
+
+rm(g1990med, g2000med, g1990p40th, g2000p40th, ggp, gl)
+```
+
+#### Statistics (tweaked version) {.tabset}
+
+##### Median|1990
+
+```{r freeman-output-stats-med1990-tweaked, echo=FALSE}
+## Give some basic stats about number of CTs and pop within each category
+# Gentrifiable | median | built since 1990
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built1990_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, median & built since 1990 | Montréal Island")
+
+# Gentrified | median | built since 1990
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_tweaked_built1990_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, median & built since 1990 | Montréal Island")
+```
+
+##### Median|2000
+
+```{r freeman-output-stats-med2000-tweaked, echo=FALSE}
+# Gentrifiable | median | built since 2000
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built2000_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, median & built since 2000 | Montréal Island")
+
+# Gentrified | median | built since 2000
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_tweaked_built2000_median) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, median & built since 2000 | Montréal Island")
+```
+
+##### 40th percentile|1990
+
+```{r freeman-output-stats40th1990-tweaked, echo=FALSE}
+# Gentrifiable | 40thpctile | built since 1990
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built1990_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, 40th percentile & built since 1990 | Montréal Island")
+
+# Gentrified | 40thpctile | built since 1990
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_tweaked_built1990_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, 40th percentile & built since 1990 | Montréal Island")
+```
+
+##### 40th percentile|2000
+
+```{r freeman-output-stats40th2000-tweaked, echo=FALSE}
+# Gentrifiable | 40thpctile | built since 2000
+freeman_stat_gentrifiable <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(candidate_built2000_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrifiable) <- NULL
+knitr::kable(freeman_stat_gentrifiable, caption = "Gentrifiable CTs, 40th percentile & built since 2000 | Montréal Island")
+
+# Gentrified | 40thpctile | built since 2000
+freeman_stat_gentrified <- gentrif_freeman06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_tweaked_built2000_40thpctile) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(freeman_stat_gentrified) <- NULL
+knitr::kable(freeman_stat_gentrified, caption = "Gentrified CTs, 40th percentile & built since 2000 | Montréal Island")
+
+rm(freeman_stat_gentrifiable, freeman_stat_gentrified)
+```
+
+### Ding, L., Hwang, J., 2016
+
+Ref: [ Cityscape Vol. 18, No. 3, Gentrification (2016), pp. 27-56](https://www.jstor.org/stable/26328272?seq=1)
+
+Ding _et al._ propose not only a binary metric gentrified/not gentrified but also an indicator of the gentrification intensity. In the present version, one category intensity is not computed: continuous gentrification, which would have required to process 1996-2006 census years in order to identify CTs already gentrifying in the previous period.
+
+```{r chunk-ding-metric}
+```
+
+```{r ding-output, echo=FALSE, fig.height=8}
+# display map of gentrified CTs at census division (~municipality) and census metropolitan area levels
+gdg <- ggplot(data = filter(gentrif_ding06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified), color=factor(gentrifiable))) + 
+  scale_fill_manual(name="Gentrified", values=c("gray", "orangered")) + 
+  scale_color_manual(name="Gentrifiable", values=c("darkgray", "firebrick")) +
+  labs(title = "Gentrifiable / Gentrified CTs") +
+  theme(axis.text = element_blank())
+
+gdgi <- ggplot(data = filter(gentrif_ding06_16_CD, CD_UID == 2466)) + 
+  geom_sf(aes(fill=factor(gentrified_category), color=factor(gentrifiable))) + 
+  scale_fill_manual(name="Level of gentrification", values=c("firebrick3", "tomato2", "rosybrown2")) + 
+  scale_color_manual(name="Gentrifiable", values=c("darkgray", "firebrick")) +
+  labs(title = "Gentrification intensity") +
+  theme(axis.text = element_blank())
+
+pmaps <- plot_grid(gdg + theme(legend.position="none"),
+                   gdgi + theme(legend.position="none"), ncol = 1)
+gl <- get_legend(gdg + theme(legend.position = "right"))
+gli <- get_legend(gdgi + theme(legend.position = "right"))
+plegs <- plot_grid(gl, gli, ncol = 1, align = 'v', axis = 'l')
+plot_grid(pmaps, plegs, rel_widths = c(1, .3))
+```
+
+#### Statistics {.tabset}
+
+##### Gentrified CT
+
+```{r ding-output-stats, echo=FALSE}
+## Give some basic stats about number of CTs and pop within each category
+# Gentrifiable | CMA
+ding_stat_gentrifiable <- gentrif_ding06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrifiable) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(ding_stat_gentrifiable) <- NULL
+knitr::kable(ding_stat_gentrifiable, caption = "Gentrifiable CTs | Montréal Island")
+
+# Gentrified | CMA
+ding_stat_gentrified <- gentrif_ding06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup()
+st_geometry(ding_stat_gentrified) <- NULL
+knitr::kable(ding_stat_gentrified, caption = "Gentrified CTs | Montréal Island")
+
+rm(ding_stat_gentrifiable, ding_stat_gentrified)
+```
+
+##### Gentrification intensity
+
+```{r ding-output-stats-intensity, echo=FALSE}
+## Give some basic stats about number of CTs and pop within each category
+# Gentrifiable | CMA
+ding_stat_intensity <- gentrif_ding06_16_CD %>%
+  filter(CD_UID == 2466) %>% #keep only Montreal island
+  group_by(gentrified_category) %>%
+  summarise(n_CTs = n(),
+            pop_2016 = sum(Population2016)) %>%
+  mutate(`n_CTs %` = round(n_CTs / sum(n_CTs) * 100, 1),
+         `pop_2016 %` = round(pop_2016 / sum(pop_2016) * 100, 1)) %>%
+  ungroup() %>%
+  replace_na(list(gentrified_category = 'not gentrified & NA'))
+  
+st_geometry(ding_stat_intensity) <- NULL
+knitr::kable(ding_stat_intensity, caption = "Gentrification intensity | Montréal Island")
+
+rm(ding_stat_intensity)
+```
+
+## Metric comparison for INTERACT cities
+
+```{r metric-cross-tab}
+# Merge all metrics into the same table
+.gentrif_rania06_16_CD_nogeom <- gentrif_rania06_16_CD %>%
+  select(GeoUID, potentially_gentrifying, gentrified) %>%
+  rename(gentrifiable = potentially_gentrifying)
+st_geometry(.gentrif_rania06_16_CD_nogeom) <- NULL
+
+.gentrif_rania06_16_CCS_nogeom <- gentrif_rania06_16_CCS %>%
+  select(GeoUID, potentially_gentrifying, gentrified) %>%
+  rename(gentrifiable = potentially_gentrifying)
+st_geometry(.gentrif_rania06_16_CCS_nogeom) <- NULL
+
+.gentrif_rania06_16_CMA_nogeom <- gentrif_rania06_16_CMA %>%
+  select(GeoUID, potentially_gentrifying, gentrified) %>%
+  rename(gentrifiable = potentially_gentrifying)
+st_geometry(.gentrif_rania06_16_CMA_nogeom) <- NULL
+
+.gentrif_grube06_16_nogeom <- gentrif_grube06_16_CMA %>%
+  select(GeoUID, gentrifiable, gentrified)
+st_geometry(.gentrif_grube06_16_nogeom) <- NULL
+
+.gentrif_freeman06_16_nogeom <- gentrif_freeman06_16_CD %>%
+  select(GeoUID,
+         candidate_built1990_median, gentrified_tweaked_built1990_median,
+         candidate_built2000_median, gentrified_tweaked_built2000_median,
+         candidate_built1990_40thpctile, gentrified_tweaked_built1990_40thpctile,
+         candidate_built2000_40thpctile, gentrified_tweaked_built2000_40thpctile) %>%
+  # NB: using the built 1990 reference year and median as threshold + tweaked computation
+  rename(gentrifiable = candidate_built1990_median,
+         gentrified = gentrified_tweaked_built1990_median)
+st_geometry(.gentrif_freeman06_16_nogeom) <- NULL
+
+.gentrif_freeman06_16_CCS_nogeom <- gentrif_freeman06_16_CCS %>%
+  select(GeoUID,
+         candidate_built1990_median, gentrified_tweaked_built1990_median,
+         candidate_built2000_median, gentrified_tweaked_built2000_median,
+         candidate_built1990_40thpctile, gentrified_tweaked_built1990_40thpctile,
+         candidate_built2000_40thpctile, gentrified_tweaked_built2000_40thpctile) %>%
+  # NB: using the built 1990 reference year and median as threshold + tweaked computation
+  rename(gentrifiable = candidate_built1990_median,
+         gentrified = gentrified_tweaked_built1990_median)
+st_geometry(.gentrif_freeman06_16_CCS_nogeom) <- NULL
+
+.gentrif_ding06_16_nogeom <- gentrif_ding06_16_CD %>%
+  select(GeoUID, gentrifiable, gentrified, gentrified_category)
+st_geometry(.gentrif_ding06_16_nogeom) <- NULL
+.gentrif_ding06_16_nogeom <- .gentrif_ding06_16_nogeom %>%
+  mutate(dummy = TRUE) %>%
+  pivot_wider(names_from = gentrified_category, names_prefix = 'Ding_', values_from = dummy) %>%
+  select(-Ding_NA)
+
+.gentrif_ding06_16_CCS_nogeom <- gentrif_ding06_16_CCS %>%
+  select(GeoUID, gentrifiable, gentrified, gentrified_category)
+st_geometry(.gentrif_ding06_16_CCS_nogeom) <- NULL
+.gentrif_ding06_16_CCS_nogeom <- .gentrif_ding06_16_CCS_nogeom %>%
+  mutate(dummy = TRUE) %>%
+  pivot_wider(names_from = gentrified_category, names_prefix = 'DingCCS_', values_from = dummy) %>%
+  select(-DingCCS_NA)
+
+metric_combined <- census_data_16 %>%
+  select(GeoUID, Population, CMA_UID, CD_UID, CSD_UID, `Region Name`) %>%
+  inner_join(.gentrif_rania06_16_CD_nogeom, by='GeoUID') %>%
+  inner_join(.gentrif_rania06_16_CCS_nogeom, by='GeoUID', suffix=c('_Rania', '_RaniaCCS')) %>%
+  inner_join(.gentrif_rania06_16_CMA_nogeom, by='GeoUID') %>%
+  inner_join(.gentrif_grube06_16_nogeom, by='GeoUID', suffix=c('_RaniaCMA', '_Grube')) %>%
+  inner_join(.gentrif_freeman06_16_nogeom, by='GeoUID') %>%
+  inner_join(.gentrif_freeman06_16_CCS_nogeom, by='GeoUID', suffix=c('_Freeman', '_FreemanCCS')) %>%
+  inner_join(.gentrif_ding06_16_nogeom, by='GeoUID') %>%
+  inner_join(.gentrif_ding06_16_CCS_nogeom, by='GeoUID', suffix=c('_Ding', '_DingCCS')) %>%
+  select(-ends_with('_median'), -ends_with('_40thpctile'))
+
+# Aggregate info (which CTs are flagged by what combination of metrics)
+metric_combined <- metric_combined %>%
+  mutate(metrics_combined = paste0(if_else(gentrified_RaniaCMA, "R", "_"),
+                                   if_else(gentrified_Grube, "G", "_"),
+                                   if_else(gentrified_Freeman, "F", "_"),
+                                   if_else(gentrified_Ding, "D", "_")),
+         metrics_combinedCCS = paste0(if_else(gentrified_RaniaCCS, "R", "_"),
+                                   if_else(gentrified_Grube, "G", "_"),
+                                   if_else(gentrified_FreemanCCS, "F", "_"),
+                                   if_else(gentrified_DingCCS, "D", "_")))  %>%
+  mutate(metrics_combined = case_when(
+      is.na(gentrified_RaniaCMA) ~ NA_character_,
+      is.na(gentrified_Grube) ~ NA_character_,
+      is.na(gentrified_Freeman) ~ NA_character_,
+      is.na(gentrified_Ding) ~ NA_character_,
+     TRUE ~ metrics_combined
+   ),
+   metrics_combinedCCS = case_when(
+      is.na(gentrified_RaniaCCS) ~ NA_character_,
+      is.na(gentrified_Grube) ~ NA_character_,
+      is.na(gentrified_FreemanCCS) ~ NA_character_,
+      is.na(gentrified_DingCCS) ~ NA_character_,
+     TRUE ~ metrics_combinedCCS
+   ))
+
+# Compute stats for CD/CMA level
+metric_combined_by_INTERACT_cities <- metric_combined %>%
+  filter(CD_UID %in% c("2466", "4711", "5915", "5917", "1001") & !is.na(metrics_combined)) %>%
+  group_by(CD_UID) %>%
+  count(metrics_combined) %>%
+  mutate(n_metrics_combined = 4 - str_count(metrics_combined, "_")) %>%
+  ungroup() %>%
+  mutate(city = case_when(CD_UID == "2466" ~ "Montréal",
+                          CD_UID == "4711" ~ "Saskatoon",
+                          CD_UID == "5915" ~ "Vancouver",
+                          CD_UID == "5917" ~ "Victoria",
+                          CD_UID == "1001" ~ "St John"))
+st_geometry(metric_combined_by_INTERACT_cities) <- NULL
+
+metric_combined_by_INTERACT_cities <- metric_combined_by_INTERACT_cities %>%
+  select(-CD_UID) %>%
+  pivot_wider(names_from = city, values_from = n, values_fill = list(n = 0)) %>%
+  arrange(desc(n_metrics_combined), desc(`Montréal` + Saskatoon + Vancouver + Victoria)) %>%
+  select(-n_metrics_combined)
+
+# Compute stats for CCS level
+metric_combinedCCS_by_INTERACT_cities <- metric_combined %>%
+  filter(CD_UID %in% c("2466", "4711", "5915", "5917", "1001") & !is.na(metrics_combined)) %>%
+  group_by(CD_UID) %>%
+  count(metrics_combinedCCS) %>%
+  mutate(n_metrics_combined = 4 - str_count(metrics_combinedCCS, "_")) %>%
+  ungroup() %>%
+  mutate(city = case_when(CD_UID == "2466" ~ "Montréal",
+                          CD_UID == "4711" ~ "Saskatoon",
+                          CD_UID == "5915" ~ "Vancouver",
+                          CD_UID == "5917" ~ "Victoria",
+                          CD_UID == "1001" ~ "St John"))
+st_geometry(metric_combinedCCS_by_INTERACT_cities) <- NULL
+
+metric_combinedCCS_by_INTERACT_cities <- metric_combinedCCS_by_INTERACT_cities %>%
+  select(-CD_UID) %>%
+  pivot_wider(names_from = city, values_from = n, values_fill = list(n = 0)) %>%
+  arrange(desc(n_metrics_combined), desc(`Montréal` + Saskatoon + Vancouver + Victoria)) %>%
+  select(-n_metrics_combined) %>%
+  filter(!is.na(metrics_combinedCCS))
+```
+
+#### {.tabset}
+
+##### Computed at the CD/CMA level
+
+```{r, echo=FALSE}
+knitr::kable(metric_combined_by_INTERACT_cities, caption = "Number of CTs flagged as gentrified by a combination of metrics, at the CD/CMA level")
+```
+
+##### Computed at the CCS level
+
+```{r, echo=FALSE}
+knitr::kable(metric_combinedCCS_by_INTERACT_cities, caption = "Number of CTs flagged as gentrified by a combination of metrics, at the CCS level")
+```
+
+####
+
+In the table above, each CT identified as gentrified by one metric is marked with the corresponding letter (`R`: Rania CMA, `G`: Grube-Cavers, `F`: Freeman and `D`: Ding) or `_` when not.
+
