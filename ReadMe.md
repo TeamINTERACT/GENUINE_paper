@@ -1,4 +1,4 @@
-# GENUINE paper
+# GENUINE (Gentrification, Urban Interventions, and Equity)
 
 ## Submitted
 
